@@ -1,0 +1,49 @@
+[project]
+name = "aitelier"
+version = "0.1.0a0"
+description = "An atelier for AI Agents."
+maintainers = [
+    { name = "Riccardo Musmeci", email = "riccardomusmeci92@gmail.com" }
+]
+readme = "README.md"
+
+dependencies = [
+    "mlx-llm",
+    "anthropic"
+]
+
+[project.optional-dependencies]
+dev = [
+    "black == 23.3.0",
+    "ruff == 0.0.264",
+    "mypy == 1.2.0",
+]
+
+[tool.ruff]
+line-length = 125
+ignore = ["E501", "D103", "F401", "C901", "B905", "E741"]
+exclude = [
+    'build',
+  '.ruff_cache',
+  '.mypy_cache',
+    "notebooks",
+    ".gitignore",
+    "venv",
+    "__pycache__",
+]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["./src/**/*.py", "./tests/**/*.py"]
+exclude = [
+  'venv',
+  '.venv',
+  'env',
+  '.env',
+  'docs',
+  'bin',
+  'lib',
+  "tests",
+  "local",
+]
+ignore_missing_imports = true

@@ -1,6 +1,11 @@
 # aitelier 🎨🤖
 An atelier for AI Agents running on your Mac thanks to [mlx-llm](https://https://github.com/riccardomusmeci/mlx-llm).
 
+## How to install it
+```bash
+pip install aitelier
+```
+
 ## Why `aitelier`? 
 
 `aitelier` is not just another agent library — it’s my personal playground to learn how AI agents work

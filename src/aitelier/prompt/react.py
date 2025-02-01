@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Optional
 from ..tool import Tool
-from .base import Prompt
+from ._base import Prompt
 
 @dataclass
 class ReActSystemPrompt(Prompt):
@@ -124,7 +124,7 @@ Here's some rules you must follow:
 * If you pick the "Act" state you can pick only one tool to use among the available ones. Also, in different steps you can use the same tool with different arguments
 * Your answer must always start with one of 'Think', 'Act', 'Observe' or 'End' and must end with 'PAUSE', signaling the end of your turn. If you don't follow this rule, you will be penalized
 * If your previous message was an 'Error', you don't start your answer with 'I apologize ...' or similar phrases. Instead, you start with 'Think' and continue with your answer
-* If the request from the user is not related to any tool you have, you have to answer that the tools at your disposal are not enough to answer the user's query. Don't come up with using a tool that is not related to the user's query.
+* If the request from the user is not related to any tool you have, you can go directly to the 'End' state and you have to answer that the tools at your disposal are not enough to answer the user's query. Don't come up with using a tool that is not related to the user's query.
 
 These are the formats you must follow for each step:
 * for the 'Think' step, your output must be structured as follows: "Think: {{ Insert your thoughts here }} PAUSE"

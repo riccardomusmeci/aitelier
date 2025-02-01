@@ -1,169 +1,190 @@
-from typing import Dict, Any, Optional, List, Union
-from ..model import Model
+from typing import List, Dict, Any, Optional, Set, Union, Tuple
+from dataclasses import dataclass, field
+from ._base import StateType, AgentState, StartState, EndState, FSMAgent, AgentContext
 from ..tool import Tool
-from .base import AgentContext
-from ..prompt import SimpleAgentPrompt, Prompt # type: ignore
-from .base import State, StateType
+from ..model import Model
+from ..prompt.agent import Prompt, AgentPrompt
+from ..errors import (
+    ParsingToolError, ToolNotFoundError, ToolExecutionError
+)
 
-class SimpleAgentStateType(StateType):
-    AGENT = "AGENT"
-    END = "END"
-    ERROR = "ERROR"
+class AgentStateType(StateType):
+    LLM = "LLM"
 
-class EndState(State):
-    """End state represents the end of the agent.
+# Default ReAct state transitions
+AGENT_VALID_STEPS = {
+    AgentStateType.START: {AgentStateType.LLM},
+    AgentStateType.LLM: {AgentStateType.LLM, AgentStateType.END, AgentStateType.ERROR},
+    AgentStateType.ERROR: {AgentStateType.LLM},
+    AgentStateType.END: {},
+}
 
-    Args:
-        final_response (str): the final response
-    """
-    def __init__(self, final_response: str) -> None:
-        self.final_response = final_response
-        self.state_type = SimpleAgentStateType.END
-        
-    def execute(self, context: AgentContext) -> "EndState":
-        """Execute the End state.
-        
+@dataclass
+class AgentStartState(StartState):
+    
+    def execute(self, context: AgentContext) -> "AgentLLMState":
+        """Execute the start state and return the LLM state.
+
         Args:
             context (AgentContext): the agent context
+
+        Returns:
+            LLMState: the LLM state
+        """
+        context.add_to_memory("user", self.message)
+        return AgentLLMState()
+
+@dataclass
+class AgentLLMState(AgentState):
+    state_type = AgentStateType.LLM
+    tool_tag: str = "tool"
+    args_tag: str = "args"
+    end_tag: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    def _update_metadata(self, context: AgentContext):
+        """Update the metadata with the latest inference data.
+
+        Args:
+            context (AgentContext): the agent context
+        """
+        if "input_tokens" not in self.metadata:
+            self.metadata["input_tokens"] = []
+            self.metadata["output_tokens"] = []
+            self.metadata["inference_time"] = []
             
-        Returns:
-            EndState: the End state
-        """
-        return self
+        self.metadata["input_tokens"].append(context.model.input_tokens[-1])
+        self.metadata["output_tokens"].append(context.model.output_tokens[-1])
+        self.metadata["inference_time"].append(context.model.inference_time[-1])
     
-    def get_metadata(self) -> Dict[str, Any]:
-        """Return the metadata of the End state.
-        
-        Returns:
-            Dict[str, Any]: the metadata
-        """
-        return {"response": self.final_response}    
+    def _parse_response(self, response: str) -> Tuple[str, Dict[str, Any]]:
+        """Extract the tool name and arguments from the response.
 
-class ErrorState(State):
-    """Error state represents an error in the agent.
+        Args:
+            response (str): the response from LLM
+            
+        Raises:
+            ParsingToolError: if there is an error parsing the tool
 
-    Args:
-        error_message (str): the error message
-    """
-    def __init__(self, error_message: str) -> None:
-        self.error_message = error_message
-        self.state_type = SimpleAgentStateType.ERROR
-    
-    def get_metadata(self) -> Dict[str, Any]:
-        """Return the metadata of the Error state.
-        
         Returns:
-            Dict[str, Any]: the metadata
+            Tuple[str, Dict[str, Any]]: tool name and tool arguments
         """
-        return {"error_message": self.error_message}
-
-class AgentState(State):
-    
-    def __init__(self) -> None:
-        self.state_type = SimpleAgentStateType.AGENT
-        self.tool_name = None
-        self.tool_args = None
-        self.input_tokens: List[int] = []
-        self.output_tokens: List[int] = []
-        self.generation_time: List[float] = []
-    
-    def execute(self, context: AgentContext) -> Union[EndState, ErrorState]:
-        """Execute the Agent state.
+        state_response = response.split(self.end_tag)[0] if self.end_tag else response
+        state_response = state_response.strip()
         
+        try:
+            tool_name = state_response.split(f"<{self.tool_tag}>")[-1].split(f"</{self.tool_tag}>")[0]
+            tool_args = eval(state_response.split(f"<{self.args_tag}>")[-1].split(f"</{self.args_tag}>")[0])
+        except Exception:
+            raise ParsingToolError(response=response)
+        return tool_name, tool_args
+    
+    def execute(self, context: AgentContext) -> Union[EndState, "AgentErrorState", "AgentLLMState"]:
+        """Execute the LLM state.
+
         Args:
             context (AgentContext): the agent context
+
+        Returns:
+            Union[EndState, ErrorState, LLMState]: the next state
         """
-        
         response = context.model.generate(
             context.memory,
             max_tokens=context.max_tokens,
             stop_word=context.stop_word
         )
-        self.input_tokens.append(context.model.input_tokens[-1])
-        self.output_tokens.append(context.model.output_tokens[-1])
-        self.generation_time.append(context.model.generation_time[-1])
+        
+        # update state stats
+        self._update_metadata(context)
+        
+        context.add_to_memory("assistant", response)
+        
+        # 1) parse the response - if error, return AgentErrorState with ParsingToolError
         try:
-            self.tool_name = response.split("<tool>")[-1].split("</tool>")[0] # type: ignore
-            self.tool_args = eval(response.split("<args>")[-1].split("</args>")[0]) # type: ignore
-        except Exception as e:
-            context.add_to_memory(
-                "system", 
-                f"Error parsing tool data: {e}. Your answer is {response}. Fix it to continue."
-            )
-            return ErrorState(f"Error parsing tool data: {e}. Your answer is {response}. Fix it to continue.")        
-        try:
-            tool = context.tools[self.tool_name] # type: ignore
-        except KeyError:
-            context.add_to_memory(
-                "system", 
-                f"Tool {self.tool_name} not found. Your answer is {response}. Fix it to continue."
-            )
-            return ErrorState(f"Tool {self.tool_name} not found. Your answer is {response}. Fix it to continue.")
-        try:
-            result = tool(**self.tool_args) # type: ignore
-        except Exception as e:
-            context.add_to_memory(
-                "system", 
-                f"Error executing tool {self.tool_name} with args {self.tool_args}: {e}. Your answer is {response}. Fix it to continue."
-            )
-            return ErrorState(f"Error executing tool {self.tool_name}: {e}. Your answer is {response}. Fix it to continue.")
-                
+            # this should be the last memory content ("Act: ...")
+            tool_name, tool_args = self._parse_response(response) # type: ignore
+        except ParsingToolError:
+            self.metadata["error"] = f"LLM answer: {response}\nError: ParsingToolError"
+            return AgentErrorState(ParsingToolError(response=response))
+        
+        # this means the agent was not able to find a valid tool
+        if tool_name == "None":
+            result = response
+        else:
+            # 2) check if the tool exists
+            try:
+                tool = context.tools[tool_name] # type: ignore
+            except KeyError:
+                available_tools = list(context.tools.keys())
+                self.metadata["error"] = f"LLM answer: {response}\nError: ToolNotFoundError"
+                return AgentErrorState(ToolNotFoundError(tool_name, available_tools))
+            
+            # 3) run the tool with the arguments
+            try:
+                result = tool(**tool_args) # type: ignore
+            except Exception as e:
+                self.metadata["error"] = f"LLM answer: {response}\nError: ToolExecutionError ({e})"
+                return AgentErrorState(ToolExecutionError(tool_name, tool_args, str(e)))
+            
+            # 4) validate transition before returning the next state
+            context.validate_step(self.state_type, AgentStateType.END) # type: ignore
+            self.metadata = {"tool": tool_name, "args": tool_args}
+        
+        # 5) return the Observe state
         return EndState(result)
-    
-    def get_metadata(self) -> Dict[str, Any]:
-        return {
-            "tool_name": self.tool_name,
-            "tool_args": self.tool_args,
-            "input_tokens": self.input_tokens,
-            "output_tokens": self.output_tokens,
-            "generation_time": self.generation_time
-        }
 
-class Agent:
-    """A simple agent that can interact with tools.
-    
+@dataclass
+class AgentErrorState(AgentState):
+    """Error state represents an error in the agent.
+
     Args:
-        model (Model): large language model
-        tools (List[Tool]): the tools available for the agent
-        system_prompt (Prompt, optional): the system prompt to use. Defaults to SimpleAgentPrompt.
-        stop_word (Optional[str], optional): the stop word to use. Defaults to None.
-        max_tokens (int, optional): the maximum number of tokens to generate. Defaults to 1024.
+        error (Exception): the error
     """
     
-    def __init__(
-        self,
-        model: Model,
-        tools: List[Tool],
-        system_prompt: Prompt = SimpleAgentPrompt, # type: ignore
-        stop_word: Optional[str] = None,
-        max_tokens: int = 1024,
-    ) -> None:
-
-        self.system = system_prompt(tools) # type: ignore
-        self.context = AgentContext(
-            memory=[{"role": "system", "content": self.system.prompt}],
-            model=model,
-            tools={tool.name: tool for tool in tools},
-            stop_word=stop_word,
-            max_tokens=max_tokens,
-        )
-        self.state = AgentState()
-        self.output_state = None
-        self.stop_word = stop_word
- 
-    def __call__(self, message: str):
-        """Start the Simple Agent with a message from the user.
+    error: Exception
+    state_type: str = AgentStateType.ERROR
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    def __post_init__(self):
+        self.error = str(self.error.message)
+        
+    def execute(self, context: AgentContext) -> AgentLLMState:
+        """Execute the Error state.
 
         Args:
-            message (str): the user message
+            context (AgentContext): the agent context
+
+        Returns:
+            ThinkState: the next state
         """
-        print("\n************** Starting Agent **************\n")
-        print(f"User: {message}")
-        # first step is always Think
-        self.context.add_to_memory("user", f"{message}")
-        self.output_state = self.state.execute(self.context) # type: ignore
-        if isinstance(self.output_state, EndState):
-            print(f"Agent Answer: {self.output_state.final_response}")
-        elif isinstance(self.output_state, ErrorState):
-            print(f"Agent Error: {self.output_state.error_message}")
+        # I need to add the error to the memory (Error: ...)
+        context.add_to_memory("assistant", f"Error: {self.error}")
+        self.metadata["error"] = self.error
+        return AgentLLMState()
+
+class Agent(FSMAgent):
+    
+    def __init__(
+        self, 
+        model: Model,
+        tools: List[Tool],
+        system_prompt: Prompt = AgentPrompt, # type: ignore
+        valid_steps: Dict[str, Set[str]] = AGENT_VALID_STEPS, # type: ignore
+        start_state: StartState = AgentStartState, # type: ignore
+        stop_word: Optional[str] = None,
+        max_iters: int = 10,
+        max_tokens: int = 1024,
+        max_retries: int = 3
+    ) -> None:
+        super().__init__(
+            model=model,
+            tools=tools,
+            system_prompt=system_prompt,
+            valid_steps=valid_steps,
+            start_state=start_state,
+            stop_word=stop_word,
+            max_iters=max_iters,
+            max_tokens=max_tokens,
+            max_retries=max_retries
+        )
         

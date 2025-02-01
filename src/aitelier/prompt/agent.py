@@ -1,17 +1,11 @@
-from dataclasses import dataclass
+from ._base import Prompt
 from typing import List, Optional
 from ..tool import Tool
+from dataclasses import dataclass
 
 @dataclass
-class Prompt:
-    """Prompt class
-    """
-    tools: Optional[List[Tool]] = None
-    prompt: str = ''
-
-@dataclass
-class SimpleAgentPrompt(Prompt):
-    """Simple Agent Prompt
+class AgentPrompt(Prompt):
+    """Agent Prompt
     """
     tools: Optional[List[Tool]] = None    
     
@@ -23,7 +17,7 @@ class SimpleAgentPrompt(Prompt):
             tools_description = "\n\n".join([tool.description for tool in self.tools])
         else:
             tools_description = ""
-        self.prompt = f"""You are an AI Agent and you work with a set of tools to provide an answer to the user's query. 
+        self.prompt = f"""You are an agent and you work with a set of tools to provide an answer to the user's query. 
         
 These are the tools available for you to use:
 {tools_description}
@@ -70,6 +64,9 @@ Your answer:
 Here's some rules you must follow:
 * your answer will always be a tool followed by the arguments in the format <tool>tool_name</tool> <args>{{"arg1": "value1", "arg2": "value2"}}</args>
 * you can only use one tool at a time
+* if you get some errors from previous iterations, you must fix your answer according to the suggestions
+* if the available tools cannot be used to solve the task, your answer must be structured as follows: <tool>None</tool> <args>{{}}</args>. Then you have to continue by saying why you can't solve the task based on the tools you have. The user needs an explanation of why you can't solve the task.
+    
 
 Now it's your turn to answer the user's query. Good luck!
 """

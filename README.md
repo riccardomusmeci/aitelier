@@ -71,7 +71,7 @@ agent("What is 10 divided by 2?")
 `aitelier` natively supports [mlx-llm](https://github.com/riccardomusmeci/mlx-llm) and Claude (with own API key)
 
 ## Examples
-1) [How to create Custom Agent as FSM - Guideline](examples/custom_agent_guideline.md)
+1) [How to create Custom Agent as FSM - Practical Example](examples/custom_agent.md)
 
 ## Known Issues
 - `aitelier` is in active development, so expect bugs and breaking changes

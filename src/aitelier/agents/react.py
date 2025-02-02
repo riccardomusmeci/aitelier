@@ -58,6 +58,7 @@ class ReActThinkState(AgentState):
     state_type: str = ReActStateType.THINK
     metadata: Dict[str, Any] = field(default_factory=dict)
     state_tag: str = "state"
+    content_tag: str = "content"
     
     def _update_metadata(self, context: AgentContext):
         """Update the statistics of the Think state.
@@ -74,19 +75,20 @@ class ReActThinkState(AgentState):
         self.metadata["output_tokens"].append(context.model.output_tokens[-1])
         self.metadata["llm_time"].append(context.model.inference_time[-1])
     
-    def _get_next_step(self, response: str) -> str:
-        """Get the next step from the response.
+    def _parse_response(self, response: str) -> Tuple[str, str]:
+        """Get the next step and its content from the response.
 
         Args:
             response (str): the response
 
         Returns:
-            str: the next step
+            Tuple[str, str]: next step and its content
         """
-        match = re.search(f"<{self.state_tag}>(.*?)</{self.state_tag}>", response)
-        if not match:
-            return "error"
-        return match.group(1)
+        step_match = re.search(f"<{self.state_tag}>(.*?)</{self.state_tag}>", response)
+        content_match = re.search(f"<{self.content_tag}>(.*?)</{self.content_tag}>", response)
+        if not step_match or not content_match:
+            return "error", "error"
+        return step_match.group(1), content_match.group(1)
                 
     def execute(self, context: AgentContext) -> Union["ReActActState", "EndState", "ReActThinkState", "ReActErrorState"]:
         """Execute the Think state.
@@ -114,8 +116,8 @@ class ReActThinkState(AgentState):
         self._update_metadata(context)
         
         # get next step
-        next_step = self._get_next_step(response).lower()
-
+        next_step, step_content = self._parse_response(response)
+        next_step = next_step.lower()
         # check the next step
         if next_step == "think":
             context.validate_step(self.state_type, ReActStateType.THINK) # type: ignore

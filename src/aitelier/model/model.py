@@ -20,7 +20,7 @@ class Model(ABC):
     
     input_tokens: List[int] = []
     output_tokens: List[int] = []
-    generation_time: List[float] = []
+    inference_time: List[float] = []
     
     @abstractmethod
     def generate(self, messages: List[Dict[str, str]], stop_word: Optional[str] = None, max_tokens: int = 1024) -> str:
@@ -119,7 +119,7 @@ class LLM(Model):
         self.output_tokens.append(len(output_tokens))
         total_time = time.time() - start_time
         tokens_per_second = token_count / total_time
-        self.generation_time.append(total_time)
+        self.inference_time.append(total_time)
         if self.debug:
             print(f"[DEBUG] Total tokens generated: {token_count}")
             print(f"[DEBUG] Total time taken: {total_time:.2f} seconds")
@@ -165,7 +165,7 @@ class LLM(Model):
         # STATS IN DEBUG MODE
         total_time = time.time() - start_time
         self.output_tokens.append(len(output_tokens))
-        self.generation_time.append(total_time)
+        self.inference_time.append(total_time)
 
 class Claude(Model):
     """Claude wrapper for the Anthropic API.
@@ -231,7 +231,7 @@ class Claude(Model):
         # Record token usage
         self.input_tokens.append(response.usage.input_tokens)
         self.output_tokens.append(response.usage.output_tokens)
-        self.generation_time.append(time.time() - t_start)
+        self.inference_time.append(time.time() - t_start)
         
         return response.content[0].text
 
@@ -275,4 +275,4 @@ class Claude(Model):
         # Record token usage after stream completes
         self.input_tokens.append(input_tokens)
         self.output_tokens.append(output_tokens)
-        self.generation_time.append(time.time() - t_start)
+        self.inference_time.append(time.time() - t_start)

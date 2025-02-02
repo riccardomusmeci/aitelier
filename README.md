@@ -72,3 +72,8 @@ agent("What is 10 divided by 2?")
 
 ## Examples
 1) [How to create Custom Agent as FSM - Guideline](examples/custom_agent_guideline.md)
+
+## Known Issues
+- `aitelier` is in active development, so expect bugs and breaking changes
+- The library is currently only tested on macOS
+- All the agents depend on the LLM model - LLMs with fewer parameters are way more buggy than the larger ones since their behavior is less predictable - my advice is to use the largest models available

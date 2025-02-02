@@ -109,12 +109,6 @@ class ReActThinkState(AgentState):
             max_tokens=context.max_tokens
         )
         
-        # response = "Agent: "
-        # print(response, end="", flush=True)
-        # for token in context.model.stream(context.memory, context.stop_word, context.max_tokens):
-        #     response += token
-        #     print(response[-len(token):], end="", flush=True)
-        
         context.add_to_memory("assistant", response)
         # update state stats
         self._update_metadata(context)
@@ -134,10 +128,9 @@ class ReActThinkState(AgentState):
             return EndState(response)
         else:
             context.validate_step(self.state_type, ReActStateType.ERROR)
-            error_message = f"Expected 'Think', 'Act', or 'End' at the beginning of the answer, got: {response}\nYour next answer must start with 'Think:', 'Act:', or 'End:'."
-            self.metadata["error"] = "LLM answer: {response}\nError: {error_message}"
+            self.metadata["error"] = "LLM answer: {response}\nError: StateStepError"
             return ReActErrorState(
-                StateStepError(error_message)
+                StateStepError(response)
             )
                 
 

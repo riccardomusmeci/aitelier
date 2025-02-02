@@ -3,7 +3,9 @@ from typing import Any, Dict, List
 class StateStepError(Exception):
     """Raised when an invalid state step is attempted"""
     def __init__(self, message: str) -> None:
-        self.message = message
+        self.message = f"""You answer did not provide the step transition correctly. 
+This was your last answer: {message}.
+Please provide the correct format for the step transition and try again."""
         
     def __repr__(self) -> str:
         return self.message

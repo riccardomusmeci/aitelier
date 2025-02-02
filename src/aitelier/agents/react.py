@@ -87,7 +87,7 @@ class ReActThinkState(AgentState):
         step_match = re.search(f"<{self.state_tag}>(.*?)</{self.state_tag}>", response)
         content_match = re.search(f"<{self.content_tag}>(.*?)</{self.content_tag}>", response)
         if not step_match or not content_match:
-            return "error"
+            return "error", "error"
         return step_match.group(1), content_match.group(1)
                 
     def execute(self, context: AgentContext) -> Union["ReActActState", "EndState", "ReActThinkState", "ReActErrorState"]:

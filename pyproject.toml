@@ -1,6 +1,6 @@
 [project]
 name = "aitelier"
-version = "0.2.0"
+version = "0.2.1"
 description = "An atelier for AI Agents."
 maintainers = [
     { name = "Riccardo Musmeci", email = "riccardomusmeci92@gmail.com" }

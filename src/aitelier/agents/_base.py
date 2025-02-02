@@ -115,6 +115,7 @@ class EndState(AgentState):
             EndState: the End state
         """
         self.metadata["response"] = self.response
+        context.add_to_memory("system", self.response)
         return self
 
 
@@ -208,6 +209,7 @@ class FSMAgent:
             # 5. update step_iter
             step_iter += 1
         
-        # 6. print final state if only EndState
+        # 6. execute the finale state and print it if final state is EndState
         if isinstance(self.states[-1], EndState):
+            self.states[-1].execute(self.context)
             self._print_progress()

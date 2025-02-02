@@ -125,11 +125,9 @@ class AgentLLMState(AgentState):
             except Exception as e:
                 self.metadata["error"] = f"LLM answer: {response}\nError: ToolExecutionError ({e})"
                 return AgentErrorState(ToolExecutionError(tool_name, tool_args, str(e)))
-            
             # 4) validate transition before returning the next state
             context.validate_step(self.state_type, AgentStateType.END) # type: ignore
-            self.metadata = {"tool": tool_name, "args": tool_args}
-        
+            self.metadata = {"tool": tool_name, "args": tool_args, "result": result}
         # 5) return the Observe state
         return EndState(result)
 

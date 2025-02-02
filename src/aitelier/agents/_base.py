@@ -166,12 +166,15 @@ class FSMAgent:
         """Print the progress of the agent (the last step).
         """
         if len(self.states) == 1:
-            from_state = "START"
+            from_state = None
         else:
             from_state = self.states[-2].state_type
         print(f"******** Agent Step {len(self.states)} ********")
-        print(f"FSM: '{from_state}' -> '{self.states[-1].state_type}'")
-        print(f"Agent Memory:\n{self.context.memory[-1]['content']}\n")
+        if from_state:
+            print(f"FSM: '{from_state}' -> '{self.states[-1].state_type}'")
+        else:
+            print(f"FSM: '{self.states[-1].state_type}'")
+        print(f"""Agent: "{self.context.memory[-1]['content']}" """)
         
     def __call__(self, message: str):
         """Start the agent with a message from the user.

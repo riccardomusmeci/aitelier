@@ -5,6 +5,7 @@ from ..model import Model
 from ..tool import Tool
 from ..prompt import ReActSystemPrompt, Prompt
 from ..errors import ToolExecutionError, MaxRetryError, ToolNotFoundError, ReActParsingToolError, StateStepError
+import re
 
 ################################### State Types ###################################
 class ReActStateType(StateType):
@@ -56,6 +57,7 @@ class ReActThinkState(AgentState):
     retry_count: int = 0
     state_type: str = ReActStateType.THINK
     metadata: Dict[str, Any] = field(default_factory=dict)
+    state_tag: str = "state"
     
     def _update_metadata(self, context: AgentContext):
         """Update the statistics of the Think state.
@@ -81,8 +83,11 @@ class ReActThinkState(AgentState):
         Returns:
             str: the next step
         """
-        return response.strip().split(":")[0]
-        
+        match = re.search(f"<{self.state_tag}>(.*?)</{self.state_tag}>", response)
+        if not match:
+            return "error"
+        return match.group(1)
+                
     def execute(self, context: AgentContext) -> Union["ReActActState", "EndState", "ReActThinkState", "ReActErrorState"]:
         """Execute the Think state.
 
@@ -103,13 +108,20 @@ class ReActThinkState(AgentState):
             stop_word=context.stop_word, 
             max_tokens=context.max_tokens
         )
+        
+        # response = "Agent: "
+        # print(response, end="", flush=True)
+        # for token in context.model.stream(context.memory, context.stop_word, context.max_tokens):
+        #     response += token
+        #     print(response[-len(token):], end="", flush=True)
+        
         context.add_to_memory("assistant", response)
         # update state stats
         self._update_metadata(context)
         
         # get next step
         next_step = self._get_next_step(response).lower()
-        
+
         # check the next step
         if next_step == "think":
             context.validate_step(self.state_type, ReActStateType.THINK) # type: ignore
